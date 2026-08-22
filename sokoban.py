@@ -18,13 +18,16 @@ class SokobanGridState(Enum):
 
 class SokobanDirection(Enum):
     "Directions to move player"
-    UP = 0
-    RIGHT = 1
-    DOWN = 2
-    LEFT = 3
+    UP = 1
+    RIGHT = -2
+    DOWN = -1
+    LEFT = 2
 
     def __str__(self: Self) -> str:
         return self.name
+
+    def reverse(self: Self) -> SokobanDirection:
+        return SokobanDirection(-self.value)
 
 class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     "Holds current level state"
@@ -66,7 +69,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
                     else:
                         row.append(state)
                 board.append(row)
-        self.board = np.array(board)
+        self.board = np.rot90(np.array(board), 1)
 
     def is_softlock(self: Self) -> bool:
         "Checks for a softlock where a box is not in target and cannot be moved"
@@ -143,7 +146,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             return []
         moves = []
         for move in SokobanDirection:
-            if move == self.last_direction:
+            if move == self.last_direction.reverse() if self.last_direction else None:
                 continue #Prevent backtracking
             soko = self.copy()
             if soko.move(move):
