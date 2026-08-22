@@ -1,5 +1,6 @@
 import csv
 from enum import Enum
+from itertools import permutations
 from pathlib import Path
 from typing import List, Optional, Self, Tuple
 
@@ -29,6 +30,14 @@ class SokobanDirection(Enum):
     def reverse(self: Self) -> SokobanDirection:
         return SokobanDirection(-self.value)
 
+
+class SokobanHeuristic(Enum):
+    "Available Sokoban heuristics"
+    ZERO = "zero"
+    SUM_NEAREST_TARGET = "sum_nearest_target"
+    MATCHING_MIN_DISTANCE = "matching_min_distance"
+
+
 class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     "Holds current level state"
     def __init__(self: Self) -> None:
@@ -37,6 +46,14 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         self.targets: List[Tuple[int, int]] = []
         self.player: Tuple[int, int] = (0, 0)
         self.last_direction: Optional[SokobanDirection] = None
+        self.heuristic_type = SokobanHeuristic.SUM_NEAREST_TARGET
+
+    @staticmethod
+    def available_heuristics() -> List[str]:
+        return [heuristic.value for heuristic in SokobanHeuristic]
+
+    def set_heuristic(self: Self, heuristic: str) -> None:
+        self.heuristic_type = SokobanHeuristic(heuristic)
 
     def __parse_cell(self: Self, cell: str) -> SokobanGridState:
         cell = cell.upper()
@@ -158,6 +175,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         soko.boxes = list(self.boxes) # Mutable, must clone!
         soko.player = self.player
         soko.last_direction = self.last_direction
+        soko.heuristic_type = self.heuristic_type
         return soko
 
 
@@ -181,6 +199,13 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         return True
 
     def heuristic(self: Self) -> float:
+        if self.heuristic_type == SokobanHeuristic.ZERO:
+            return 0
+        if self.heuristic_type == SokobanHeuristic.MATCHING_MIN_DISTANCE:
+            return self.__matching_min_distance()
+        return self.__sum_nearest_target_distance()
+
+    def __sum_nearest_target_distance(self: Self) -> float:
         "Admissible lower bound: sum of each box distance to its nearest target."
         total = 0
         for box in self.boxes:
@@ -191,6 +216,28 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
                 for target in self.targets
             )
         return total
+
+    def __matching_min_distance(self: Self) -> float:
+        "Admissible lower bound using the minimum box-target distance assignment."
+        if not self.boxes:
+            return 0
+        if len(self.targets) < len(self.boxes):
+            return float("inf")
+
+        sorted_boxes = tuple(sorted(self.boxes))
+        sorted_targets = tuple(sorted(self.targets))
+        best_distance = float("inf")
+
+        for target_assignment in permutations(sorted_targets, len(sorted_boxes)):
+            total_distance = 0
+            for box, target in zip(sorted_boxes, target_assignment):
+                total_distance += abs(box[0] - target[0]) + abs(box[1] - target[1])
+                if total_distance >= best_distance:
+                    break
+            else:
+                best_distance = total_distance
+
+        return best_distance
 
     def __hash__(self: Self) -> int:
         return hash((self.player, tuple(sorted(self.boxes))))

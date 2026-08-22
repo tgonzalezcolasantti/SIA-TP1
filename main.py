@@ -45,10 +45,17 @@ def main():
         action="store_true",
         help="Allow repeated states instead of pruning them",
     )
+    parser.add_argument(
+        "--heuristic",
+        choices=Sokoban.available_heuristics(),
+        default="sum_nearest_target",
+        help="Heuristic to use for informed searches",
+    )
     args = parser.parse_args()
 
     base_soko = Sokoban()
     base_soko.init_board(Path(args.level))
+    base_soko.set_heuristic(args.heuristic)
     search = build_search(args.algorithm, base_soko, args.limit, args.eval_repeated)
 
     try:
