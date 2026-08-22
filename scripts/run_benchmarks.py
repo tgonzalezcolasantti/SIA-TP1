@@ -15,7 +15,11 @@ from search import NoPossibleSolutions
 from sokoban import Sokoban
 
 DEFAULT_ALGORITHMS = ["bfs", "dfs", "greedy", "astar"]
-DEFAULT_HEURISTICS = ["sum_nearest_target", "matching_min_distance"]
+DEFAULT_HEURISTICS = [
+    "sum_nearest_target",
+    "matching_min_distance",
+    "matching_real_distance",
+]
 INFORMED_ALGORITHMS = {"greedy", "astar"}
 FIELDNAMES = [
     "level",
