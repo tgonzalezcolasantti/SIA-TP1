@@ -62,11 +62,12 @@ class Node:
         return self.children
 
     def path(self: Self) -> List[Enum]:
-        if not self.parent:
-            return []
-        return [*self.parent.path(), self.action]
+        actions = []
+        node = self
+        while node.parent:
+            actions.append(node.action)
+            node = node.parent
+        return list(reversed(actions))
 
     def __str__(self: Self) -> str:
-        if self.parent:
-            return f"{self.parent} -> {self.action}"
-        return "Start"
+        return "Start" + "".join(f" -> {action}" for action in self.path())
