@@ -20,6 +20,7 @@ class Node:
         action: Optional[NodeAction],
         parent: Optional[Node],
         cost: float,
+        heuristic_value: float,
     ):
         self.parent = parent
         self.children: List[Node]
@@ -27,6 +28,7 @@ class Node:
         self.cost = cost
         self.depth = (parent.depth + 1) if parent else 1
         self.action = action
+        self.heuristic_value = heuristic_value
 
     def is_goal(self: Self) -> bool:
         raise NotImplementedError()
@@ -66,7 +68,7 @@ class Search:
                         new_node.depth >= old_node.depth
                         and new_node.state == old_node.state
                     ):
-                        break # We decided to exclude the node
+                        break  # We decided to exclude the node
                 else:
                     # Finished loop without excluding -> include
                     self.frontier.append(new_node)
@@ -151,3 +153,28 @@ class IDDFS(DLS, Search):
     def __rebuild_frontier(self: Self) -> None:
         self.frontier = self.node_dump
         self.node_dump.clear()
+
+
+class LocalGreedy(Search):
+    "Like DFS but expanding deepest best heuristically-estimated nodes first"
+
+    def reorder_fr(self: Self) -> None:
+        self.frontier.sort(key=lambda x: (x.depth, x.heuristic_value))
+
+
+class GlobalGreedy(Search):
+    "Like UCS but expanding best heuristically-estimated nodes first"
+
+    def reorder_fr(self: Self) -> None:
+        self.frontier.sort(key=lambda x: x.heuristic_value)
+
+
+class AStar(Search):
+    "La moria de los algoritmos (?)"
+
+    @staticmethod
+    def __f(node: Node) -> tuple[float, float]:
+        return (node.heuristic_value + node.cost, node.heuristic_value)
+
+    def reorder_fr(self: Self) -> None:
+        self.frontier.sort(key=self.__f)
