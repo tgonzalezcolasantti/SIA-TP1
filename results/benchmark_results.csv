@@ -1,0 +1,13 @@
+level,algorithm,heuristic,status,steps,cost,expanded_nodes,frontier_nodes,time_sec,timeout_sec
+level_easy.csv,bfs,N/A,success,3,3,7,5,0.00016189999996640836,10.0
+level_easy.csv,dfs,N/A,success,3,3,146,0,0.002295100000083039,10.0
+level_easy.csv,greedy,sum_nearest_target,success,3,3,3,7,0.00011519999998199637,10.0
+level_easy.csv,greedy,matching_min_distance,success,3,3,3,7,0.00011409999979150598,10.0
+level_easy.csv,astar,sum_nearest_target,success,3,3,3,7,0.00010840000004463946,10.0
+level_easy.csv,astar,matching_min_distance,success,3,3,3,7,0.00011719999974957318,10.0
+level.csv,bfs,N/A,success,78,78,15880,22,0.2676155999997718,10.0
+level.csv,dfs,N/A,success,1244,1244,4161,444,0.072328099999595,10.0
+level.csv,greedy,sum_nearest_target,success,104,104,1321,110,0.020574300000134826,10.0
+level.csv,greedy,matching_min_distance,success,96,96,768,70,0.014557199999671866,10.0
+level.csv,astar,sum_nearest_target,success,78,78,15823,35,0.2759907999998177,10.0
+level.csv,astar,matching_min_distance,success,78,78,15798,42,0.2947153000000071,10.0
