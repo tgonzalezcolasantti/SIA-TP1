@@ -1,11 +1,11 @@
 
-
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Generic, List, Optional, Self, Tuple, TypeVar
 
 TNodeState = TypeVar("TNodeState", bound="NodeState")
 TNodeAction = TypeVar("TNodeAction", bound="Enum")
+
 
 class NodeState(ABC, Generic[TNodeState, TNodeAction]):
     @abstractmethod
@@ -15,6 +15,12 @@ class NodeState(ABC, Generic[TNodeState, TNodeAction]):
     @abstractmethod
     def apply_possible_moves(self: Self) -> List[Tuple[TNodeState, TNodeAction]]:
         pass
+
+    def get_cost(self: Self, action: TNodeAction) -> float:
+        return 1
+
+    def heuristic(self: Self) -> float:
+        return 0
 
 
 class Node:
@@ -34,15 +40,31 @@ class Node:
         self.action = node_action
         self.heuristic_value = heuristic_value
 
+    def __lt__(self: Self, other: "Node") -> bool:
+        if self.heuristic_value + self.cost == other.heuristic_value + other.cost:
+            return self.heuristic_value < other.heuristic_value
+        return self.heuristic_value + self.cost < other.heuristic_value + other.cost
+
     def is_goal(self: Self) -> bool:
         return self.state.is_solved()
 
     def expand(self: Self) -> List[Node]:
         self.children = []
-        for move in self.state.apply_possible_moves():
-            node = Node(move[0], move[1], self, 0, 0) #TODO Costs n stuff
+        for child_state, action in self.state.apply_possible_moves():
+            node = Node(
+                child_state,
+                action,
+                self,
+                self.cost + self.state.get_cost(action),
+                child_state.heuristic(),
+            )
             self.children.append(node)
         return self.children
+
+    def path(self: Self) -> List[Enum]:
+        if not self.parent:
+            return []
+        return [*self.parent.path(), self.action]
 
     def __str__(self: Self) -> str:
         if self.parent:

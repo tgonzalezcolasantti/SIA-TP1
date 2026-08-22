@@ -1,8 +1,8 @@
-import collections
 import csv
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Self, Tuple
+
 import numpy as np
 
 from tree import NodeState
@@ -34,6 +34,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     def __init__(self: Self) -> None:
         self.board: np.ndarray
         self.boxes:  List[Tuple[int, int]] = []
+        self.targets: List[Tuple[int, int]] = []
         self.player: Tuple[int, int] = (0, 0)
         self.last_direction: Optional[SokobanDirection] = None
 
@@ -66,36 +67,43 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
                     elif state == SokobanGridState.PLAYER:
                         self.player = (idx_x, idx_y)
                         row.append(SokobanGridState.EMPTY)
+                    elif state == SokobanGridState.TARGET:
+                        self.targets.append((idx_x, idx_y))
+                        row.append(state)
                     else:
                         row.append(state)
                 board.append(row)
         self.board = np.rot90(np.array(board), 1)
+        board_width = len(board[0])
+        self.targets = [self.__rotate_position(target, board_width) for target in self.targets]
+        self.boxes = [self.__rotate_position(box, board_width) for box in self.boxes]
+        self.player = self.__rotate_position(self.player, board_width)
 
     def is_softlock(self: Self) -> bool:
         "Checks for a softlock where a box is not in target and cannot be moved"
         for box in self.boxes:
             if self.board[box] != SokobanGridState.TARGET:
-                try:
-                    horizontal_lock = SokobanGridState.WALL in (
-                        self.__new_position(box, SokobanDirection.RIGHT),
-                        self.__new_position(box, SokobanDirection.LEFT),
-                    )
-                except IndexError:
-                    horizontal_lock = True
-                try:
-                    vertical_lock = SokobanGridState.WALL in (
-                        self.__new_position(box, SokobanDirection.UP),
-                        self.__new_position(box, SokobanDirection.DOWN),
-                    )
-                except IndexError:
-                    vertical_lock = True
+                horizontal_lock = (
+                    self.__is_blocked(self.__new_position(box, SokobanDirection.RIGHT))
+                    or self.__is_blocked(self.__new_position(box, SokobanDirection.LEFT))
+                )
+                vertical_lock = (
+                    self.__is_blocked(self.__new_position(box, SokobanDirection.UP))
+                    or self.__is_blocked(self.__new_position(box, SokobanDirection.DOWN))
+                )
                 if horizontal_lock and vertical_lock:
                     return True
         return False
 
+    def __is_blocked(self: Self, position: tuple[int, int]) -> bool:
+        if not self.__is_inside_board(position):
+            return True
+        return self.board[position] == SokobanGridState.WALL
 
     def __move_box(self: Self, box: tuple[int, int], direction: SokobanDirection) -> bool:
         new_position = self.__new_position(box, direction)
+        if not self.__is_inside_board(new_position):
+            return False
         if self.board[new_position] == SokobanGridState.WALL:
             return False
         if new_position in self.boxes:
@@ -117,10 +125,21 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             return (position[0]+1, position[1])
         raise ValueError()
 
+    @staticmethod
+    def __rotate_position(position: tuple[int, int], board_width: int) -> tuple[int, int]:
+        return (board_width - position[0] - 1, position[1])
+
+    def __is_inside_board(self: Self, position: tuple[int, int]) -> bool:
+        return (
+            0 <= position[0] < self.board.shape[0]
+            and 0 <= position[1] < self.board.shape[1]
+        )
 
     def move(self: Self, direction: SokobanDirection) -> bool:
         "Applies a movement to the player, if possible"
         new_position = self.__new_position(self.player, direction)
+        if not self.__is_inside_board(new_position):
+            return False
         if self.board[new_position] == SokobanGridState.WALL:
             return False
         if new_position in self.boxes:
@@ -135,8 +154,10 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         "Clones this sokoban state"
         soko = Sokoban()
         soko.board = self.board # Immutable, no need to clone
+        soko.targets = self.targets
         soko.boxes = list(self.boxes) # Mutable, must clone!
         soko.player = self.player
+        soko.last_direction = self.last_direction
         return soko
 
 
@@ -146,8 +167,6 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             return []
         moves = []
         for move in SokobanDirection:
-            if move == self.last_direction.reverse() if self.last_direction else None:
-                continue #Prevent backtracking
             soko = self.copy()
             if soko.move(move):
                 moves.append((soko, move))
@@ -161,6 +180,20 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
                 return False
         return True
 
+    def heuristic(self: Self) -> float:
+        "Admissible lower bound: sum of each box distance to its nearest target."
+        total = 0
+        for box in self.boxes:
+            if self.board[box] == SokobanGridState.TARGET:
+                continue
+            total += min(
+                abs(box[0] - target[0]) + abs(box[1] - target[1])
+                for target in self.targets
+            )
+        return total
+
+    def __hash__(self: Self) -> int:
+        return hash((self.player, tuple(sorted(self.boxes))))
 
     def __eq__(self: Self, value: object) -> bool:
         if isinstance(value, Sokoban):
