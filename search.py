@@ -1,51 +1,23 @@
+from abc import ABC, abstractmethod
 from typing import List, Optional, Self
+
+from tree import Node, NodeState
 
 
 class NoPossibleSolutions(BaseException):
     "Exception to raise when search exhausted all paths and no solution was found"
 
 
-class NodeState:
-    pass
-
-
-class NodeAction:
-    pass
-
-
-class Node:
-    def __init__(
-        self: Self,
-        state: NodeState,
-        action: Optional[NodeAction],
-        parent: Optional[Node],
-        cost: float,
-        heuristic_value: float,
-    ):
-        self.parent = parent
-        self.children: List[Node]
-        self.state = state
-        self.cost = cost
-        self.depth = (parent.depth + 1) if parent else 1
-        self.action = action
-        self.heuristic_value = heuristic_value
-
-    def is_goal(self: Self) -> bool:
-        raise NotImplementedError()
-
-    def expand(self: Self) -> List[Node]:
-        # TODO Set parent-child relationship of new nodes
-        raise NotImplementedError()
-
-
-class Search:
+class Search(ABC):
     "Base class for searches"
 
-    def __init__(self: Self, eval_repeated: bool = False):
-        self.root: Node  # Tree is modeled linking nodes
-        self.frontier: List[Node] = []
+    def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
+        #TODO Heuristics!
+        self.root = Node(init_state, None, None, 0, 0)  # Tree is modeled linking nodes
+        self.frontier: List[Node] = [self.root]
         self.explored_nodes: List[Node] = []
         self.eval_repeated = eval_repeated
+        self.counter: int = 0
 
     def __search_node(self: Self) -> Optional[Node]:
         try:
@@ -54,6 +26,9 @@ class Search:
             raise NoPossibleSolutions() from e
         if node.is_goal():
             return node
+        self.counter += 1
+        if not self.counter % 1000:
+            print(self.counter)
         children = node.expand()
         self.explored_nodes.append(node)
 
@@ -75,6 +50,7 @@ class Search:
         self.reorder_fr()
         return None
 
+    @abstractmethod
     def reorder_fr(self: Self) -> None:
         "Reorders current frontier depending on search method used"
         raise NotImplementedError()
@@ -112,9 +88,11 @@ class DLS(DFS, Search):
 
     def __init__(
         self: Self,
+        init_state: NodeState,
         limit: int,
+        eval_repeated: bool = False,
     ):
-        super().__init__()
+        super().__init__(init_state, eval_repeated)
         self.limit = limit
         self.node_dump: List[Node] = []
 
@@ -134,11 +112,12 @@ class IDDFS(DLS, Search):
 
     def __init__(
         self: Self,
+        init_state: NodeState,
         initial_limit: int,
         growth_factor: int,
         max_limit: Optional[int] = None,
     ):
-        super().__init__(initial_limit)
+        super().__init__(init_state, initial_limit)
         self.growth_factor = growth_factor
         self.max_limit = max_limit
 
