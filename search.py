@@ -60,7 +60,7 @@ class SearchResult:
 
 FrontierList = TypeVar(
     "FrontierList", bound=Sequence[Node]
-)  # Can be any subtype of str
+)
 
 
 class Search(ABC, Generic[FrontierList]):
