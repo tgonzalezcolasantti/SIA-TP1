@@ -1,10 +1,11 @@
+from enum import Enum
 import heapq
 import time
 from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from itertools import count
-from typing import Deque, Dict, List, Optional, Self, Set
+from typing import Deque, Dict, List, Optional, Self, Set, Tuple, override
 
 from tree import Node, NodeState
 
@@ -23,7 +24,7 @@ class SearchResult:
     processing_time_sec: float
 
     @property
-    def solution_path(self) -> List[object]:
+    def solution_path(self) -> List[Enum]:
         if not self.solution:
             return []
         return self.solution.path()
@@ -50,10 +51,9 @@ class Search(ABC):
     def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
         self.root = Node(init_state, None, None, 0, init_state.heuristic())
         self.eval_repeated = eval_repeated
-        self.expanded_nodes = 0
-        self.start_time = 0.0
+        self.expanded_nodes: int = 0
+        self.start_time: float = 0.0
 
-    @abstractmethod
     def search(self: Self) -> SearchResult:
         "Performs the search and returns a solution or raises NoPossibleSolutions"
         raise NotImplementedError()
@@ -78,72 +78,49 @@ class QueueSearch(Search):
 
     def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
         super().__init__(init_state, eval_repeated)
-        self.frontier_states: Set[NodeState] = {init_state}
-        self.explored_states: Set[NodeState] = set()
+        self.frontier: Deque[Node] = deque([self.root])
+        self.frontier_overflow: Deque[Node] = deque()
+        self.frontier_states: Dict[NodeState, int] = {self.root.state: self.root.depth}
+        self.explored_states: Dict[NodeState, int] = {}
+        self.limit: Optional[int] = None
 
     def _should_skip_child(self: Self, child: Node) -> bool:
         if self.eval_repeated:
             return False
-        return child.state in self.explored_states or child.state in self.frontier_states
+
+        if child.state in self.explored_states:
+            if child.depth >= self.explored_states[child.state]:
+                return True
+            self.explored_states[child.state] = child.depth
+            return False
+
+        if child.state in self.frontier_states:
+            return False
+        return False
 
     def _register_child(self: Self, child: Node) -> None:
         if not self.eval_repeated:
-            self.frontier_states.add(child.state)
+            self.frontier_states[child.state] = child.depth
 
     def _mark_expanded(self: Self, node: Node) -> None:
         if not self.eval_repeated:
-            self.explored_states.add(node.state)
+            self.explored_states[node.state] = node.depth
         self.expanded_nodes += 1
 
-
-class BFS(QueueSearch):
-    "Explores least deep nodes first"
-
-    def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
-        super().__init__(init_state, eval_repeated)
-        self.frontier: Deque[Node] = deque([self.root])
-
-    def frontier_size(self: Self) -> int:
-        return len(self.frontier)
+    @abstractmethod
+    def _get_next_node(self: Self) -> Node:
+        raise NotImplementedError()
 
     def search(self: Self) -> SearchResult:
         self.start_time = time.perf_counter()
         while self.frontier:
-            node = self.frontier.popleft()
-            self.frontier_states.discard(node.state)
+            node = self._get_next_node()
+            self.frontier_states.pop(node.state, None)
 
             if node.is_goal():
                 return self._build_result(node)
-
-            self._mark_expanded(node)
-            for child in node.expand():
-                if self._should_skip_child(child):
-                    continue
-                self.frontier.append(child)
-                self._register_child(child)
-
-        raise NoPossibleSolutions()
-
-
-class DFS(QueueSearch):
-    "Explores deepest nodes first"
-
-    def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
-        super().__init__(init_state, eval_repeated)
-        self.frontier: List[Node] = [self.root]
-
-    def frontier_size(self: Self) -> int:
-        return len(self.frontier)
-
-    def search(self: Self) -> SearchResult:
-        self.start_time = time.perf_counter()
-        while self.frontier:
-            node = self.frontier.pop()
-            self.frontier_states.discard(node.state)
-
-            if node.is_goal():
-                return self._build_result(node)
-            if not self.eval_repeated and node.state in self.explored_states:
+            if self.limit and node.depth >= self.limit:
+                self.frontier_overflow.append(node)
                 continue
 
             self._mark_expanded(node)
@@ -154,6 +131,27 @@ class DFS(QueueSearch):
                 self._register_child(child)
 
         raise NoPossibleSolutions()
+
+    def frontier_size(self: Self) -> int:
+        return len(self.frontier)
+
+    def expand_frontier(self: Self):
+        self.frontier.extend(self.frontier_overflow)
+        self.frontier_overflow.clear()
+
+class BFS(QueueSearch):
+    "Explores least deep nodes first"
+
+    @override
+    def _get_next_node(self: Self) -> Node:
+        return self.frontier.popleft()
+
+
+class DFS(QueueSearch):
+    "Explores deepest nodes first"
+
+    def _get_next_node(self: Self) -> Node:
+        return self.frontier.pop()
 
 
 class DLS(DFS):
@@ -168,30 +166,8 @@ class DLS(DFS):
         super().__init__(init_state, eval_repeated)
         self.limit = limit
 
-    def search(self: Self) -> SearchResult:
-        self.start_time = time.perf_counter()
-        while self.frontier:
-            node = self.frontier.pop()
-            self.frontier_states.discard(node.state)
 
-            if node.is_goal():
-                return self._build_result(node)
-            if node.depth >= self.limit:
-                continue
-            if not self.eval_repeated and node.state in self.explored_states:
-                continue
-
-            self._mark_expanded(node)
-            for child in node.expand():
-                if self._should_skip_child(child):
-                    continue
-                self.frontier.append(child)
-                self._register_child(child)
-
-        raise NoPossibleSolutions()
-
-
-class IDDFS(Search):
+class IDDFS(DLS):
     "Repeats depth limited search with increasing limits."
 
     def __init__(
@@ -201,37 +177,27 @@ class IDDFS(Search):
         growth_factor: int,
         max_limit: Optional[int] = None,
     ):
-        super().__init__(init_state)
-        self.initial_limit = initial_limit
+        super().__init__(init_state, initial_limit)
         self.growth_factor = growth_factor
         self.max_limit = max_limit
-        self._frontier_size = 0
-
-    def frontier_size(self: Self) -> int:
-        return self._frontier_size
 
     def search(self: Self) -> SearchResult:
         self.start_time = time.perf_counter()
-        limit = self.initial_limit
 
-        while self.max_limit is None or limit <= self.max_limit:
-            dls = DLS(self.root.state, limit)
+        while self.max_limit is None or (self.limit <= self.max_limit): # type: ignore
             try:
-                result = dls.search()
-                self.expanded_nodes += dls.expanded_nodes
-                self._frontier_size = dls.frontier_size()
+                result = super().search()
                 return SearchResult(
                     True,
                     result.solution,
                     result.path_cost,
-                    self.expanded_nodes,
-                    self._frontier_size,
+                    result.expanded_nodes,
+                    self.frontier_size(),
                     time.perf_counter() - self.start_time,
                 )
             except NoPossibleSolutions:
-                self.expanded_nodes += dls.expanded_nodes
-                self._frontier_size = dls.frontier_size()
-                limit += self.growth_factor
+                self.expand_frontier()
+                self.limit += self.growth_factor # type: ignore
 
         raise NoPossibleSolutions()
 
