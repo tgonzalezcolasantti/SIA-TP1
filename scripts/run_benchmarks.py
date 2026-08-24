@@ -208,7 +208,7 @@ def print_row(row: Dict[str, object]) -> None:
         f"expanded={row['expanded_nodes']!s:<8} time={time_text}"
     )
 
-def run_simulations(levels, algorithms, heuristics, limit, eval_repeated, timeout):
+def run_simulations(runs, levels, algorithms, heuristics, limit, eval_repeated, timeout, tasks):
     taskprogress = Progress(            
         TextColumn("[progress.description]{task.description}"),
         SpinnerColumn(),
@@ -227,9 +227,9 @@ def run_simulations(levels, algorithms, heuristics, limit, eval_repeated, timeou
     table.add_row(taskprogress)
     table.add_row(globalprogress)
     rows = []
-    with ThreadPool(processes=int(multiprocessing.cpu_count())) as executor, Live(table, refresh_per_second=10):
+    with ThreadPool(processes=tasks or int(multiprocessing.cpu_count())) as executor, Live(table, refresh_per_second=10):
         jobs: List[ApplyResult]= []
-        for run in range(5):
+        for run in range(runs):
             for level, algorithm, heuristic in benchmark_cases(levels, algorithms, heuristics):
                 task = taskprogress.add_task(f'{run} {level} {algorithm} {heuristic}', start=False, total=100, visible=False, is_task=True)
                 jobs.append(executor.apply_async(run_with_timeout, (run, level, algorithm, heuristic, limit, eval_repeated, timeout, task, taskprogress)))
@@ -279,13 +279,18 @@ def main() -> None:
         default="results/benchmark_results.csv",
         help="CSV output path",
     )
+    parser.add_argument(
+        "--tasks",
+        type=int,
+        help="How many parallel tasks to run. By default uses all available cores, but might eat up all available ram and die.",
+    )
     args = parser.parse_args()
 
     levels = parse_csv_arg(args.levels)
     algorithms = parse_csv_arg(args.algorithms)
     heuristics = parse_csv_arg(args.heuristics)
 
-    rows = run_simulations(levels, algorithms, heuristics, args.limit, args.eval_repeated, args.timeout)
+    rows = run_simulations(args.runs, levels, algorithms, heuristics, args.limit, args.eval_repeated, args.timeout, args.tasks)
 
     output = ROOT_DIR / args.output
     write_results(rows, output)
