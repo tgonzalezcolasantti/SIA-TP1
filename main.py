@@ -55,6 +55,7 @@ def main():
 
     base_soko = Sokoban()
     base_soko.init_board(Path(args.level))
+    print(base_soko)
     base_soko.set_heuristic(args.heuristic)
     search = build_search(args.algorithm, base_soko, args.limit, args.eval_repeated)
 

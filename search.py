@@ -132,7 +132,6 @@ class QueueSearch(Search):
     def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
         super().__init__(init_state, eval_repeated)
         self.frontier: Deque[Node] = deque([self.root])
-        self.frontier_states: Dict[NodeState, int] = {self.root.state: self.root.depth}
         self.explored_states: Dict[NodeState, int] = {}
         self.limit: Optional[int] = None
 
@@ -140,22 +139,15 @@ class QueueSearch(Search):
     def _should_skip_child(self: Self, child: Node) -> bool:
         if self.eval_repeated:
             return False
-
         if child.state in self.explored_states:
             if child.depth >= self.explored_states[child.state]:
                 return True
             self.explored_states[child.state] = child.depth
-            return False
-
-        if child.state in self.frontier_states:
-            return False
         return False
 
     @override
     def _register_child(self: Self, child: Node) -> None:
         self.frontier.append(child)
-        if not self.eval_repeated:
-            self.frontier_states[child.state] = child.depth
 
     @override
     def _mark_expanded(self: Self, node: Node) -> None:
@@ -177,10 +169,9 @@ class BFS(QueueSearch):
     @override
     def _get_next_node(self: Self) -> Node:
         node = self.frontier.popleft()
-        if node.depth > self.current_depth:
-            self.current_depth = node.depth
-            print(f"Level {node.depth} (eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {(len(self.explored_states)*100 / (self.expanded_nodes +1)):.3}%)")
-        self.frontier_states.pop(node.state, None)
+        # if node.depth > self.current_depth:
+        #     self.current_depth = node.depth
+        #     print(f"Level {node.depth} (eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {(len(self.explored_states)*100 / (self.expanded_nodes +1)):.3}%)")
         return node
 
 
@@ -190,7 +181,6 @@ class DFS(QueueSearch):
     @override
     def _get_next_node(self: Self) -> Node:
         node = self.frontier.pop()
-        self.frontier_states.pop(node.state, None)
         return node
 
 

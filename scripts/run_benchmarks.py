@@ -1,11 +1,26 @@
 import argparse
 import csv
 import multiprocessing
+from multiprocessing.pool import ApplyResult, ThreadPool
 import sys
 import time
 from pathlib import Path
 from queue import Empty
 from typing import Dict, List, Optional
+
+from rich.live import Live
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
@@ -22,6 +37,7 @@ DEFAULT_HEURISTICS = [
 ]
 INFORMED_ALGORITHMS = {"greedy", "astar"}
 FIELDNAMES = [
+    "run",
     "level",
     "algorithm",
     "heuristic",
@@ -31,7 +47,7 @@ FIELDNAMES = [
     "expanded_nodes",
     "frontier_nodes",
     "time_sec",
-    "timeout_sec",
+    "solution",
 ]
 
 
@@ -66,6 +82,7 @@ def run_case(
             "expanded_nodes": result.expanded_nodes,
             "frontier_nodes": result.frontier_nodes,
             "time_sec": result.processing_time_sec,
+            "solution": str(result.solution),
         }
     except NoPossibleSolutions:
         return {
@@ -78,6 +95,7 @@ def run_case(
             "expanded_nodes": search.expanded_nodes,
             "frontier_nodes": search.frontier_size(),
             "time_sec": time.perf_counter() - started_at,
+            "solucion": "N/A"
         }
 
 
@@ -99,12 +117,15 @@ def run_case_worker(queue, level, algorithm, heuristic, limit, eval_repeated) ->
 
 
 def run_with_timeout(
+    run: int,
     level: str,
     algorithm: str,
     heuristic: Optional[str],
     limit: int,
     eval_repeated: bool,
     timeout: float,
+    task: TaskID,
+    progress: Progress,
 ) -> Dict[str, object]:
     context = multiprocessing.get_context("spawn")
     queue = context.Queue()
@@ -112,13 +133,20 @@ def run_with_timeout(
         target=run_case_worker,
         args=(queue, level, algorithm, heuristic, limit, eval_repeated),
     )
+    if progress:
+        progress.start_task(task)
+        progress.update(task, visible=True)
     process.start()
     process.join(timeout)
 
+    if progress:
+        progress.update(task, completed=100)
+        progress.remove_task(task)
     if process.is_alive():
         process.terminate()
         process.join()
         return {
+            "run": run,
             "level": level,
             "algorithm": algorithm,
             "heuristic": heuristic or "N/A",
@@ -127,13 +155,16 @@ def run_with_timeout(
             "cost": "",
             "expanded_nodes": "",
             "frontier_nodes": "",
-            "time_sec": timeout,
+            "time_sec": f'{timeout:.4f}',
         }
 
     try:
-        return queue.get_nowait()
+        ans = queue.get_nowait()
+        ans["run"] = run
+        return ans
     except Empty:
         return {
+            "run": run,
             "level": level,
             "algorithm": algorithm,
             "heuristic": heuristic or "N/A",
@@ -142,7 +173,7 @@ def run_with_timeout(
             "cost": "",
             "expanded_nodes": "",
             "frontier_nodes": "",
-            "time_sec": "",
+            "time_sec": f'{timeout:.4f}',
         }
 
 
@@ -158,13 +189,12 @@ def benchmark_cases(levels: List[str], algorithms: List[str], heuristics: List[s
     return cases
 
 
-def write_results(rows: List[Dict[str, object]], output: Path, timeout: float) -> None:
+def write_results(rows: List[Dict[str, object]], output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
         writer.writeheader()
         for row in rows:
-            row = {**row, "timeout_sec": timeout}
             writer.writerow(row)
 
 
@@ -178,13 +208,54 @@ def print_row(row: Dict[str, object]) -> None:
         f"expanded={row['expanded_nodes']!s:<8} time={time_text}"
     )
 
+def run_simulations(levels, algorithms, heuristics, limit, eval_repeated, timeout):
+    taskprogress = Progress(            
+        TextColumn("[progress.description]{task.description}"),
+        SpinnerColumn(),
+        TimeElapsedColumn(),
+        transient=True
+    )
+    globalprogress = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+    )
+    table = Table(box=None)
+    table.add_row(taskprogress)
+    table.add_row(globalprogress)
+    rows = []
+    with ThreadPool(processes=int(multiprocessing.cpu_count())) as executor, Live(table, refresh_per_second=10):
+        jobs: List[ApplyResult]= []
+        for run in range(5):
+            for level, algorithm, heuristic in benchmark_cases(levels, algorithms, heuristics):
+                task = taskprogress.add_task(f'{run} {level} {algorithm} {heuristic}', start=False, total=100, visible=False, is_task=True)
+                jobs.append(executor.apply_async(run_with_timeout, (run, level, algorithm, heuristic, limit, eval_repeated, timeout, task, taskprogress)))
+        full_progress = globalprogress.add_task(f"Total progress ({len(jobs)} elements)", total=len(jobs), is_task=False)
+        while(len(jobs) > 0):
+            for job in list(jobs):
+                if job.ready():
+                    jobs.remove(job)
+                    row = job.get()
+                    globalprogress.advance(full_progress)
+                    rows.append(row)
+                    #print_row(row)
+            time.sleep(0.1)
+    return rows
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run comparative Sokoban search benchmarks")
     parser.add_argument(
         "--levels",
-        default="level_easy.csv,level.csv",
+        default="level_easy.csv,level_mid.csv,level.csv,level_3.csv,level_4.csv",
         help="Comma-separated level files",
+    )
+    parser.add_argument(
+        "--runs",
+        default=10,
+        help="How many iterations to run, to get error margins",
     )
     parser.add_argument(
         "--algorithms",
@@ -196,8 +267,8 @@ def main() -> None:
         default=",".join(DEFAULT_HEURISTICS),
         help="Comma-separated heuristics for greedy/astar",
     )
-    parser.add_argument("--limit", type=int, default=30, help="Depth limit for dls/iddfs")
-    parser.add_argument("--timeout", type=float, default=30.0, help="Timeout per run in seconds")
+    parser.add_argument("--limit", type=int, default=100, help="Depth limit for dls/iddfs")
+    parser.add_argument("--timeout", type=float, default=120.0, help="Timeout per run in seconds")
     parser.add_argument(
         "--eval-repeated",
         action="store_true",
@@ -213,22 +284,11 @@ def main() -> None:
     levels = parse_csv_arg(args.levels)
     algorithms = parse_csv_arg(args.algorithms)
     heuristics = parse_csv_arg(args.heuristics)
-    rows = []
 
-    for level, algorithm, heuristic in benchmark_cases(levels, algorithms, heuristics):
-        row = run_with_timeout(
-            level,
-            algorithm,
-            heuristic,
-            args.limit,
-            args.eval_repeated,
-            args.timeout,
-        )
-        rows.append(row)
-        print_row(row)
+    rows = run_simulations(levels, algorithms, heuristics, args.limit, args.eval_repeated, args.timeout)
 
     output = ROOT_DIR / args.output
-    write_results(rows, output, args.timeout)
+    write_results(rows, output)
     print(f"\nSaved benchmark results to {output}")
 
 

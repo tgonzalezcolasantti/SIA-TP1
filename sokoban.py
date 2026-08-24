@@ -61,6 +61,8 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         self.player: Tuple[int, int] = (0, 0)
         self.last_direction: Optional[SokobanDirection] = None
         self.heuristic_type = SokobanHeuristic.SUM_NEAREST_TARGET
+        self.last_pushed_box: bool = False
+        self.hash: int
 
     @staticmethod
     def available_heuristics() -> List[str]:
@@ -94,7 +96,6 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         self.target_distances = {
             target: self.__distances_from_target(target) for target in self.targets
         }
-        print(self)
 
     def is_softlock(self: Self) -> bool:
         "Checks static deadlocks where at least one box can no longer reach a solution."
@@ -205,6 +206,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         if new_position in self.boxes:
             if not self.__move_box(new_position, direction):
                 return False
+            self.last_pushed_box = True
         self.player = new_position
         self.last_direction = direction
         return True
@@ -212,10 +214,10 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     def copy(self: Self) -> Sokoban:
         "Clones this sokoban state"
         soko = Sokoban()
-        soko.board = self.board  # Immutable, no need to clone
+        soko.board = self.board
         soko.targets = self.targets
         soko.target_distances = self.target_distances
-        soko.boxes = list(self.boxes)  # Mutable, must clone!
+        soko.boxes = list(self.boxes)
         soko.player = self.player
         soko.last_direction = self.last_direction
         soko.heuristic_type = self.heuristic_type
@@ -227,6 +229,8 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             return []
         moves = []
         for move in SokobanDirection:
+            if self.last_direction and move == self.last_direction.reverse() and not self.last_pushed_box:
+                continue
             soko = self.copy()
             if soko.move(move):
                 moves.append((soko, move))
@@ -335,6 +339,6 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         res = ""
         for y in range(self.board.shape[1]):
             for x in range(self.board.shape[0]):
-                res += self.__cell_to_char((x, y))
+                res += self.__cell_to_char((x, y)) + " "
             res += "\n"
         return res
