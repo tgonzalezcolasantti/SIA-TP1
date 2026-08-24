@@ -139,11 +139,7 @@ class QueueSearch(Search):
 
     @override
     def _should_skip_child(self: Self, child: Node) -> bool:
-        if (not self.eval_repeated):
-            if child.depth >= self.explored_states.get(child.state, float("inf")):
-                return True
-            self.explored_states[child.state] = child.depth
-        return False
+        return not self.eval_repeated and child.depth >= self.explored_states.get(child.state, float("inf"))
 
     @override
     def _register_child(self: Self, child: Node) -> None:
@@ -169,9 +165,9 @@ class BFS(QueueSearch):
     @override
     def _get_next_node(self: Self) -> Node:
         node = self.frontier.popleft()
-        if node.depth > self.current_depth:
-            self.current_depth = node.depth
-            print(f"Level {node.depth} (front. {len(self.frontier)}, eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {((self.skipped_nodes)*100 / (self.expanded_nodes + self.skipped_nodes+1)):.4}%)")
+        # if node.depth > self.current_depth:
+        #     self.current_depth = node.depth
+        #     print(f"Level {node.depth} (front. {len(self.frontier)}, eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {((self.skipped_nodes)*100 / (self.expanded_nodes + self.skipped_nodes+1)):.4}%)")
         return node
 
 
