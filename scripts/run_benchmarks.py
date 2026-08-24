@@ -249,7 +249,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run comparative Sokoban search benchmarks")
     parser.add_argument(
         "--levels",
-        default="level_easy.csv,level_mid.csv,level.csv,level_3.csv,level_4.csv",
+        default="level_easy.csv,level_mid.csv,level.csv,level_2.csv,level_3.csv,level_4.csv",
         help="Comma-separated level files",
     )
     parser.add_argument(
@@ -268,7 +268,7 @@ def main() -> None:
         help="Comma-separated heuristics for greedy/astar",
     )
     parser.add_argument("--limit", type=int, default=100, help="Depth limit for dls/iddfs")
-    parser.add_argument("--timeout", type=float, default=120.0, help="Timeout per run in seconds")
+    parser.add_argument("--timeout", type=float, default=1000.0, help="Timeout per run in seconds")
     parser.add_argument(
         "--eval-repeated",
         action="store_true",

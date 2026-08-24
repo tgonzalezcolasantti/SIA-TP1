@@ -74,6 +74,7 @@ class Search(ABC, Generic[FrontierList]):
         self.limit: Optional[int] = None
         self.frontier: FrontierList
         self.frontier_overflow: List[Node] = []
+        self.skipped_nodes: int = 0
 
     @abstractmethod
     def _should_skip_child(self: Self, child: Node) -> bool:
@@ -105,9 +106,10 @@ class Search(ABC, Generic[FrontierList]):
 
             self._mark_expanded(node)
             for child in node.expand():
-                if self._should_skip_child(child):
-                    continue
-                self._register_child(child)
+                if not self._should_skip_child(child):
+                    self._register_child(child)
+                else:
+                    self.skipped_nodes += 1
 
         raise NoPossibleSolutions()
 
@@ -137,10 +139,8 @@ class QueueSearch(Search):
 
     @override
     def _should_skip_child(self: Self, child: Node) -> bool:
-        if self.eval_repeated:
-            return False
-        if child.state in self.explored_states:
-            if child.depth >= self.explored_states[child.state]:
+        if (not self.eval_repeated):
+            if child.depth >= self.explored_states.get(child.state, float("inf")):
                 return True
             self.explored_states[child.state] = child.depth
         return False
@@ -169,9 +169,9 @@ class BFS(QueueSearch):
     @override
     def _get_next_node(self: Self) -> Node:
         node = self.frontier.popleft()
-        # if node.depth > self.current_depth:
-        #     self.current_depth = node.depth
-        #     print(f"Level {node.depth} (eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {(len(self.explored_states)*100 / (self.expanded_nodes +1)):.3}%)")
+        if node.depth > self.current_depth:
+            self.current_depth = node.depth
+            print(f"Level {node.depth} (front. {len(self.frontier)}, eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {((self.skipped_nodes)*100 / (self.expanded_nodes + self.skipped_nodes+1)):.4}%)")
         return node
 
 
