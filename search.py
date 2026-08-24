@@ -171,10 +171,15 @@ class QueueSearch(Search):
 
 class BFS(QueueSearch):
     "Explores least deep nodes first"
-
+    def __init__(self: Self, init_state: NodeState, eval_repeated: bool = False):
+        super().__init__(init_state, eval_repeated)
+        self.current_depth = 0
     @override
     def _get_next_node(self: Self) -> Node:
         node = self.frontier.popleft()
+        if node.depth > self.current_depth:
+            self.current_depth = node.depth
+            print(f"Level {node.depth} (eval. {len(self.explored_states)}, expanded {self.expanded_nodes}, ratio {(len(self.explored_states)*100 / (self.expanded_nodes +1)):.3}%)")
         self.frontier_states.pop(node.state, None)
         return node
 
