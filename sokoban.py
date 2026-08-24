@@ -9,8 +9,10 @@ import numpy as np
 
 from tree import NodeState
 
+
 class SokobanGridState(Enum):
     "Possible cell states to parse from level file"
+
     EMPTY = 0
     WALL = 1
     TARGET = 2
@@ -26,6 +28,7 @@ class SokobanGridState(Enum):
 
 class SokobanDirection(Enum):
     "Directions to move player"
+
     UP = 1
     RIGHT = -2
     DOWN = -1
@@ -40,6 +43,7 @@ class SokobanDirection(Enum):
 
 class SokobanHeuristic(Enum):
     "Available Sokoban heuristics"
+
     ZERO = "zero"
     SUM_NEAREST_TARGET = "sum_nearest_target"
     MATCHING_MIN_DISTANCE = "matching_min_distance"
@@ -48,9 +52,10 @@ class SokobanHeuristic(Enum):
 
 class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     "Holds current level state"
+
     def __init__(self: Self) -> None:
         self.board: np.ndarray
-        self.boxes:  List[Tuple[int, int]] = []
+        self.boxes: List[Tuple[int, int]] = []
         self.targets: List[Tuple[int, int]] = []
         self.target_distances: Dict[Tuple[int, int], Dict[Tuple[int, int], int]] = {}
         self.player: Tuple[int, int] = (0, 0)
@@ -85,8 +90,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
                         self.targets.append((idx_x, idx_y))
                     row.append(state)
                 board.append(row)
-        self.board = np.rot90(np.fliplr(np.array(board)), 1) #black magic
-        board_width = len(board[0])
+        self.board = np.rot90(np.fliplr(np.array(board)), 1)  # black magic
         self.target_distances = {
             target: self.__distances_from_target(target) for target in self.targets
         }
@@ -94,25 +98,25 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
 
     def is_softlock(self: Self) -> bool:
         "Checks static deadlocks where at least one box can no longer reach a solution."
-        return any(self.__is_box_deadlocked(box) for box in self.boxes) or self.__has_2x2_deadlock()
+        return any(
+            self.__is_box_deadlocked(box) for box in self.boxes
+        )  # or self.__has_2x2_deadlock()
 
     def __is_box_deadlocked(self: Self, box: tuple[int, int]) -> bool:
         if self.board[box] == SokobanGridState.TARGET:
             return False
         return (
             self.__is_corner_deadlock(box)
-            or self.__cannot_reach_any_target(box)
+            # or self.__cannot_reach_any_target(box)
         )
 
     def __is_corner_deadlock(self: Self, box: tuple[int, int]) -> bool:
-        horizontal_lock = (
-            self.__is_blocked(self.__new_position(box, SokobanDirection.RIGHT))
-            or self.__is_blocked(self.__new_position(box, SokobanDirection.LEFT))
-        )
-        vertical_lock = (
-            self.__is_blocked(self.__new_position(box, SokobanDirection.UP))
-            or self.__is_blocked(self.__new_position(box, SokobanDirection.DOWN))
-        )
+        horizontal_lock = self.__is_blocked(
+            self.__new_position(box, SokobanDirection.RIGHT)
+        ) or self.__is_blocked(self.__new_position(box, SokobanDirection.LEFT))
+        vertical_lock = self.__is_blocked(
+            self.__new_position(box, SokobanDirection.UP)
+        ) or self.__is_blocked(self.__new_position(box, SokobanDirection.DOWN))
         return horizontal_lock and vertical_lock
 
     def __cannot_reach_any_target(self: Self, box: tuple[int, int]) -> bool:
@@ -135,25 +139,26 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
                     continue
                 if any(self.__is_target(cell) for cell in block):
                     continue
-                if all(self.__is_static_wall(cell) or cell in box_positions for cell in block):
+                if all(
+                    self.__is_static_wall(cell) or cell in box_positions
+                    for cell in block
+                ):
                     return True
         return False
 
     def __is_blocked(self: Self, position: tuple[int, int]) -> bool:
-        if not self.__is_inside_board(position):
-            return True
-        return self.board[position] == SokobanGridState.WALL
+        return self.board[position] == SokobanGridState.WALL or position in self.boxes
 
     def __is_static_wall(self: Self, position: tuple[int, int]) -> bool:
-        return not self.__is_inside_board(position) or self.board[position] == SokobanGridState.WALL
+        return self.board[position] == SokobanGridState.WALL
 
     def __is_target(self: Self, position: tuple[int, int]) -> bool:
-        return self.__is_inside_board(position) and self.board[position] == SokobanGridState.TARGET
+        return self.board[position] == SokobanGridState.TARGET
 
-    def __move_box(self: Self, box: tuple[int, int], direction: SokobanDirection) -> bool:
+    def __move_box(
+        self: Self, box: tuple[int, int], direction: SokobanDirection
+    ) -> bool:
         new_position = self.__new_position(box, direction)
-        if not self.__is_inside_board(new_position):
-            return False
         if self.board[new_position] == SokobanGridState.WALL:
             return False
         if new_position in self.boxes:
@@ -162,27 +167,23 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         self.boxes.append(new_position)
         return True
 
-
     @staticmethod
-    def __new_position(position: tuple[int, int], direction: SokobanDirection) -> tuple[int, int]:
+    def __new_position(
+        position: tuple[int, int], direction: SokobanDirection
+    ) -> tuple[int, int]:
         if direction == SokobanDirection.UP:
-            return (position[0], position[1]-1)
+            return (position[0], position[1] - 1)
         if direction == SokobanDirection.DOWN:
-            return (position[0], position[1]+1)
+            return (position[0], position[1] + 1)
         if direction == SokobanDirection.LEFT:
-            return (position[0]-1, position[1])
+            return (position[0] - 1, position[1])
         if direction == SokobanDirection.RIGHT:
-            return (position[0]+1, position[1])
+            return (position[0] + 1, position[1])
         raise ValueError()
 
-
-    def __is_inside_board(self: Self, position: tuple[int, int]) -> bool:
-        return (
-            0 <= position[0] < self.board.shape[0]
-            and 0 <= position[1] < self.board.shape[1]
-        )
-
-    def __distances_from_target(self: Self, target: tuple[int, int]) -> Dict[Tuple[int, int], int]:
+    def __distances_from_target(
+        self: Self, target: tuple[int, int]
+    ) -> Dict[Tuple[int, int], int]:
         distances = {target: 0}
         frontier = deque([target])
 
@@ -190,10 +191,7 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             current = frontier.popleft()
             for direction in SokobanDirection:
                 candidate = self.__new_position(current, direction)
-                if (
-                    not self.__is_static_wall(candidate)
-                    and candidate not in distances
-                ):
+                if not self.__is_static_wall(candidate) and candidate not in distances:
                     distances[candidate] = distances[current] + 1
                     frontier.append(candidate)
 
@@ -202,8 +200,6 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     def move(self: Self, direction: SokobanDirection) -> bool:
         "Applies a movement to the player, if possible"
         new_position = self.__new_position(self.player, direction)
-        if not self.__is_inside_board(new_position):
-            return False
         if self.board[new_position] == SokobanGridState.WALL:
             return False
         if new_position in self.boxes:
@@ -213,19 +209,17 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         self.last_direction = direction
         return True
 
-
     def copy(self: Self) -> Sokoban:
         "Clones this sokoban state"
         soko = Sokoban()
-        soko.board = self.board # Immutable, no need to clone
+        soko.board = self.board  # Immutable, no need to clone
         soko.targets = self.targets
         soko.target_distances = self.target_distances
-        soko.boxes = list(self.boxes) # Mutable, must clone!
+        soko.boxes = list(self.boxes)  # Mutable, must clone!
         soko.player = self.player
         soko.last_direction = self.last_direction
         soko.heuristic_type = self.heuristic_type
         return soko
-
 
     def apply_possible_moves(self: Self) -> List[Tuple[Sokoban, SokobanDirection]]:
         "Applies all possible movements and returns a list of board statuses and applied movements"
@@ -237,7 +231,6 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             if soko.move(move):
                 moves.append((soko, move))
         return moves
-
 
     def is_solved(self: Self) -> bool:
         "Checks to see if this board is solved"
@@ -317,18 +310,22 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
 
     def __eq__(self: Self, value: object) -> bool:
         if isinstance(value, Sokoban):
-            return self.player == value.player and set(self.boxes) == set(value.boxes)
+            if self.player == value.player:
+                for box in self.boxes:
+                    if box not in value.boxes:
+                        return False
+                return True
         return False
 
     def __cell_to_char(self: Self, cell: Tuple[int, int]) -> str:
         x, y = cell
-        if self.board[x,y] == SokobanGridState.WALL:
+        if self.board[x, y] == SokobanGridState.WALL:
             return "#"
-        if self.board[x,y] == SokobanGridState.TARGET:
+        if self.board[x, y] == SokobanGridState.TARGET:
             if (x, y) not in self.boxes:
                 return "@"
             return "$"
-        if self.player == (x,y):
+        if self.player == (x, y):
             return "P"
         if (x, y) in self.boxes:
             return "X"
