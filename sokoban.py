@@ -13,9 +13,15 @@ class SokobanGridState(Enum):
     "Possible cell states to parse from level file"
     EMPTY = 0
     WALL = 1
-    BOX = 2
-    TARGET = 3
-    PLAYER = 4
+    TARGET = 2
+
+    @staticmethod
+    def from_cell(cell: str) -> SokobanGridState:
+        if "W" in cell:
+            return SokobanGridState.WALL
+        if "T" in cell:
+            return SokobanGridState.TARGET
+        return SokobanGridState.EMPTY
 
 
 class SokobanDirection(Enum):
@@ -58,19 +64,9 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
     def set_heuristic(self: Self, heuristic: str) -> None:
         self.heuristic_type = SokobanHeuristic(heuristic)
 
-    def __parse_cell(self: Self, cell: str) -> SokobanGridState:
+    def __parse_cell(self: Self, cell: str) -> Tuple[SokobanGridState, bool, bool]:
         cell = cell.upper()
-        if "E" in cell:
-            return SokobanGridState.EMPTY
-        if "W" in cell:
-            return SokobanGridState.WALL
-        if "B" in cell:
-            return SokobanGridState.BOX
-        if "T" in cell:
-            return SokobanGridState.TARGET
-        if "P" in cell:
-            return SokobanGridState.PLAYER
-        raise ValueError("Invalid game level data")
+        return (SokobanGridState.from_cell(cell), "B" in cell, "P" in cell)
 
     def init_board(self: Self, level_file: Path) -> None:
         "Initializes the board using a level file"
@@ -80,27 +76,21 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             for idx_y, line in enumerate(reader):
                 row = []
                 for idx_x, cell in enumerate(line):
-                    state = self.__parse_cell(cell)
-                    if state == SokobanGridState.BOX:
+                    state, is_box, is_player = self.__parse_cell(cell)
+                    if is_box:
                         self.boxes.append((idx_x, idx_y))
-                        row.append(SokobanGridState.EMPTY)
-                    elif state == SokobanGridState.PLAYER:
+                    if is_player:
                         self.player = (idx_x, idx_y)
-                        row.append(SokobanGridState.EMPTY)
-                    elif state == SokobanGridState.TARGET:
+                    if state == SokobanGridState.TARGET:
                         self.targets.append((idx_x, idx_y))
-                        row.append(state)
-                    else:
-                        row.append(state)
+                    row.append(state)
                 board.append(row)
-        self.board = np.rot90(np.array(board), 1)
+        self.board = np.rot90(np.fliplr(np.array(board)), 1) #black magic
         board_width = len(board[0])
-        self.targets = [self.__rotate_position(target, board_width) for target in self.targets]
-        self.boxes = [self.__rotate_position(box, board_width) for box in self.boxes]
-        self.player = self.__rotate_position(self.player, board_width)
         self.target_distances = {
             target: self.__distances_from_target(target) for target in self.targets
         }
+        print(self)
 
     def is_softlock(self: Self) -> bool:
         "Checks static deadlocks where at least one box can no longer reach a solution."
@@ -185,9 +175,6 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             return (position[0]+1, position[1])
         raise ValueError()
 
-    @staticmethod
-    def __rotate_position(position: tuple[int, int], board_width: int) -> tuple[int, int]:
-        return (board_width - position[0] - 1, position[1])
 
     def __is_inside_board(self: Self, position: tuple[int, int]) -> bool:
         return (
@@ -333,3 +320,24 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
             return self.player == value.player and set(self.boxes) == set(value.boxes)
         return False
 
+    def __cell_to_char(self: Self, cell: Tuple[int, int]) -> str:
+        x, y = cell
+        if self.board[x,y] == SokobanGridState.WALL:
+            return "#"
+        if self.board[x,y] == SokobanGridState.TARGET:
+            if (x, y) not in self.boxes:
+                return "@"
+            return "$"
+        if self.player == (x,y):
+            return "P"
+        if (x, y) in self.boxes:
+            return "X"
+        return " "
+
+    def __str__(self: Self) -> str:
+        res = ""
+        for y in range(self.board.shape[1]):
+            for x in range(self.board.shape[0]):
+                res += self.__cell_to_char((x, y))
+            res += "\n"
+        return res
