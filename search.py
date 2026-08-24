@@ -139,8 +139,16 @@ class QueueSearch(Search):
 
     @override
     def _should_skip_child(self: Self, child: Node) -> bool:
-        return not self.eval_repeated and child.depth >= self.explored_states.get(child.state, float("inf"))
-
+        if not self.eval_repeated:
+            if child.depth >= self.explored_states.get(child.state, float("inf")):
+                return True
+            # If child is evaluable, we write it immediately to avoid generating extra useless nodes
+            # Instead of waiting to pop the node next iteration and registering it there
+            # The end result is the same: only the first encounter of a state will be explored
+            # But we save *so much* execution time doing it this way
+            self.explored_states[child.state] = child.depth
+        return False
+    
     @override
     def _register_child(self: Self, child: Node) -> None:
         self.frontier.append(child)

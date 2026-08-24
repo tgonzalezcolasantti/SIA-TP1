@@ -209,7 +209,7 @@ def print_row(row: Dict[str, object]) -> None:
     )
 
 def run_simulations(runs, levels, algorithms, heuristics, limit, eval_repeated, timeout, tasks):
-    taskprogress = Progress(            
+    taskprogress = Progress(
         TextColumn("[progress.description]{task.description}"),
         SpinnerColumn(),
         TimeElapsedColumn(),
@@ -242,7 +242,6 @@ def run_simulations(runs, levels, algorithms, heuristics, limit, eval_repeated, 
                     globalprogress.advance(full_progress)
                     rows.append(row)
                     #print_row(row)
-            time.sleep(0.1)
     return rows
 
 def main() -> None:
