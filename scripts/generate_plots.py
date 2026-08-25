@@ -2,21 +2,28 @@ import csv
 from pathlib import Path
 from typing import Dict, List, Mapping
 
-from matplotlib import cm
 import numpy as np
 import matplotlib.pyplot as plt
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 colors = ["lightcoral", "red", "sandybrown", "darkgoldenrod", "yellowgreen", "chartreuse", "deepskyblue", "royalblue", "mediumpurple", "hotpink"]
+order = ["bfs", "dfs", "iddfs", "greedy sum", "greedy matching min", "greedy matching real", "astar sum", "astar matching min", "astar matching real"]
+
+def algo_sort_key(algo: str) -> int:
+    for idx, name in enumerate(order):
+        if name in algo:
+            return idx
+    return -1
 
 def bar_graph(output_file, data: Mapping[str, Mapping[str, float | int | List[float]]], xlabel: str, ylabel: str):
     bar_width = 1 / (len(data) + 2)
-    fig, ax = plt.subplots(figsize =(20, 8))
+    _, ax = plt.subplots(figsize =(20, 8))
+    levels = list(data[list(data.keys())[0]].keys())
 
-    for idx, algo in enumerate(data):
+    for idx, algo in enumerate(sorted(data, key=algo_sort_key)):
         bars_x = np.arange(len(data[algo])) + bar_width * idx
-        algo_data = list(data[algo].values())
+        algo_data = [data[algo][level] for level in levels]
         if isinstance(algo_data[0], List):
             means = [np.mean(x) for x in algo_data] # type: ignore
             errors = [np.std(x) for x in algo_data] # type: ignore
@@ -30,9 +37,9 @@ def bar_graph(output_file, data: Mapping[str, Mapping[str, float | int | List[fl
 
     plt.xlabel(xlabel, fontweight ='bold', fontsize = 15)
     plt.ylabel(ylabel, fontweight ='bold', fontsize = 15)
-    plt.xticks([r + 0.5-bar_width for r in range(len(data[list(data.keys())[0]]))],
-            list(data[list(data.keys())[0]].keys()))
+    plt.xticks([r + 0.5-bar_width for r in range(len(data[list(data.keys())[0]]))], levels)
     ax.set_yscale('log')
+    ax.margins(y=0.2)
     plt.legend()
     #plt.show()
     plt.savefig(output_file)
@@ -62,6 +69,7 @@ def parse_csv(path):
 
 def main():
     times, expanded_nodes, frontier_nodes, cost = parse_csv(ROOT_DIR / 'results' / 'benchmark_results.csv')
+    print(times)
     plot_folder = ROOT_DIR / 'results' / 'plots'
     bar_graph(plot_folder / 'time.png', times, "Tiempo de ejecucion por algoritmo por nivel", "Tiempo")
     bar_graph(plot_folder / 'expanded.png', expanded_nodes, "Nodos expandidos por algoritmo por nivel", "Nodos expandidos")

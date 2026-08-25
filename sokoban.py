@@ -60,9 +60,8 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         self.target_distances: Dict[Tuple[int, int], Dict[Tuple[int, int], int]] = {}
         self.player: Tuple[int, int] = (0, 0)
         self.last_direction: Optional[SokobanDirection] = None
-        self.heuristic_type = SokobanHeuristic.SUM_NEAREST_TARGET
+        self.heuristic_type = SokobanHeuristic.ZERO
         self.last_pushed_box: bool = False
-        self.hash: int
 
     @staticmethod
     def available_heuristics() -> List[str]:
@@ -99,17 +98,12 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
 
     def is_softlock(self: Self) -> bool:
         "Checks static deadlocks where at least one box can no longer reach a solution."
-        return any(
-            self.__is_box_deadlocked(box) for box in self.boxes
-        )  # or self.__has_2x2_deadlock()
+        return any(self.__is_box_deadlocked(box) for box in self.boxes)
 
     def __is_box_deadlocked(self: Self, box: tuple[int, int]) -> bool:
         if self.board[box] == SokobanGridState.TARGET:
             return False
-        return (
-            self.__is_corner_deadlock(box)
-            # or self.__cannot_reach_any_target(box)
-        )
+        return self.__is_corner_deadlock(box)
 
     def __is_corner_deadlock(self: Self, box: tuple[int, int]) -> bool:
         horizontal_lock = self.__is_blocked(
@@ -120,41 +114,11 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
         ) or self.__is_blocked(self.__new_position(box, SokobanDirection.DOWN))
         return horizontal_lock and vertical_lock
 
-    def __cannot_reach_any_target(self: Self, box: tuple[int, int]) -> bool:
-        return all(box not in distances for distances in self.target_distances.values())
-
-    def __has_2x2_deadlock(self: Self) -> bool:
-        box_positions = set(self.boxes)
-        for box in self.boxes:
-            if self.board[box] == SokobanGridState.TARGET:
-                continue
-            x, y = box
-            for origin in ((x - 1, y - 1), (x - 1, y), (x, y - 1), (x, y)):
-                block = (
-                    origin,
-                    (origin[0] + 1, origin[1]),
-                    (origin[0], origin[1] + 1),
-                    (origin[0] + 1, origin[1] + 1),
-                )
-                if box not in block:
-                    continue
-                if any(self.__is_target(cell) for cell in block):
-                    continue
-                if all(
-                    self.__is_static_wall(cell) or cell in box_positions
-                    for cell in block
-                ):
-                    return True
-        return False
-
     def __is_blocked(self: Self, position: tuple[int, int]) -> bool:
         return self.board[position] == SokobanGridState.WALL or position in self.boxes
 
     def __is_static_wall(self: Self, position: tuple[int, int]) -> bool:
         return self.board[position] == SokobanGridState.WALL
-
-    def __is_target(self: Self, position: tuple[int, int]) -> bool:
-        return self.board[position] == SokobanGridState.TARGET
 
     def __move_box(
         self: Self, box: tuple[int, int], direction: SokobanDirection
@@ -266,18 +230,11 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
 
     def __matching_min_distance(self: Self) -> float:
         "Admissible lower bound using the minimum box-target distance assignment."
-        if not self.boxes:
-            return 0
-        if len(self.targets) < len(self.boxes):
-            return float("inf")
-
-        sorted_boxes = tuple(sorted(self.boxes))
-        sorted_targets = tuple(sorted(self.targets))
         best_distance = float("inf")
 
-        for target_assignment in permutations(sorted_targets, len(sorted_boxes)):
+        for target_assignment in permutations(self.targets, len(self.boxes)):
             total_distance = 0
-            for box, target in zip(sorted_boxes, target_assignment):
+            for box, target in zip(self.boxes, target_assignment):
                 total_distance += abs(box[0] - target[0]) + abs(box[1] - target[1])
                 if total_distance >= best_distance:
                     break
@@ -288,20 +245,12 @@ class Sokoban(NodeState["Sokoban", "SokobanDirection"]):
 
     def __matching_real_distance(self: Self) -> float:
         "Admissible lower bound using BFS-preprocessed distances through the board."
-        if not self.boxes:
-            return 0
-        if len(self.targets) < len(self.boxes):
-            return float("inf")
-
-        sorted_boxes = tuple(sorted(self.boxes))
-        sorted_targets = tuple(sorted(self.targets))
         best_distance = float("inf")
 
-        for target_assignment in permutations(sorted_targets, len(sorted_boxes)):
+        for target_assignment in permutations(self.targets, len(self.boxes)):
             total_distance = 0
-            for box, target in zip(sorted_boxes, target_assignment):
-                distance = self.target_distances[target].get(box, float("inf"))
-                total_distance += distance
+            for box, target in zip(self.boxes, target_assignment):
+                total_distance += self.target_distances[target].get(box, float("inf"))
                 if total_distance >= best_distance:
                     break
             else:

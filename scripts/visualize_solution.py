@@ -1,8 +1,13 @@
 import argparse
 import html
+from io import BytesIO
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+from PIL import Image
+import cv2
+import numpy as np
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR))
@@ -11,6 +16,7 @@ from main import build_search
 from search import NoPossibleSolutions
 from sokoban import Sokoban, SokobanGridState
 from tree import Node
+from cairosvg import svg2png
 
 CELL_COLORS = {
     "wall": "#2f3437",
@@ -87,167 +93,31 @@ def frame_svg(state: Sokoban, step: int, action: str, cell_size: int = 42) -> st
     return "\n".join(parts)
 
 
-def render_html(nodes: List[Node], level: str, algorithm: str, heuristic: str) -> str:
+def render_video(nodes: List[Node], output: Path, fps: int) -> None:
     actions = ["Start"] + [str(node.action) for node in nodes[1:]]
     frames = [
         frame_svg(node.state, index, actions[index])
         for index, node in enumerate(nodes)
     ]
-    escaped_actions = ", ".join(f'"{html.escape(action)}"' for action in actions)
+    # Video writer to create .avi file
+    video = cv2.VideoWriter(output, cv2.VideoWriter.fourcc(*'mp4v'), fps, (1000, 1000), True)
+    frames.append(frames[-1])
+    # Appending images to video
+    for image in frames:
+        png = svg2png(bytestring=image, output_width=1000, output_height=1000)
+        if png:
+            pil_img = Image.open(BytesIO(png))
+            cv_img = np.array(pil_img.convert('RGB'))[:, :, ::-1].copy()  # Taken from https://stackoverflow.com/questions/14134892/convert-image-from-pil-to-opencv-format
+            video.write(cv_img)
 
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sokoban Solution</title>
-  <style>
-    body {{
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #fbfaf7;
-      color: #202124;
-    }}
-    main {{
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 24px;
-    }}
-    header {{
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: end;
-      margin-bottom: 18px;
-    }}
-    h1 {{
-      margin: 0 0 6px;
-      font-size: 24px;
-    }}
-    p {{
-      margin: 0;
-      color: #5f6368;
-    }}
-    .viewer {{
-      display: grid;
-      grid-template-columns: minmax(280px, max-content) minmax(220px, 1fr);
-      gap: 22px;
-      align-items: start;
-    }}
-    .board {{
-      background: #ffffff;
-      border: 1px solid #d8d0c2;
-      padding: 10px;
-      overflow: auto;
-    }}
-    .frame {{
-      display: none;
-    }}
-    .frame.active {{
-      display: block;
-    }}
-    .controls {{
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }}
-    .buttons {{
-      display: flex;
-      gap: 8px;
-    }}
-    button {{
-      border: 1px solid #c7ced6;
-      background: #ffffff;
-      color: #202124;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-    }}
-    input[type="range"] {{
-      width: 100%;
-    }}
-    .step {{
-      font-size: 18px;
-      font-weight: 700;
-    }}
-    .legend {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(120px, 1fr));
-      gap: 8px;
-      font-size: 13px;
-    }}
-    .legend span {{
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }}
-    .swatch {{
-      width: 16px;
-      height: 16px;
-      border: 1px solid #c7ced6;
-    }}
-  </style>
-</head>
-<body>
-  <main>
-    <header>
-      <div>
-        <h1>Sokoban Solution</h1>
-        <p>{html.escape(level)} | {html.escape(algorithm)} | {html.escape(heuristic)}</p>
-      </div>
-      <p>{len(nodes) - 1} moves</p>
-    </header>
-    <section class="viewer">
-      <div class="board">
-        {"".join(frames)}
-      </div>
-      <aside class="controls">
-        <div class="step" id="stepLabel"></div>
-        <input id="stepRange" type="range" min="0" max="{len(nodes) - 1}" value="0">
-        <div class="buttons">
-          <button id="prevButton">Previous</button>
-          <button id="nextButton">Next</button>
-        </div>
-        <div class="legend">
-          <span><i class="swatch" style="background:{CELL_COLORS["wall"]}"></i>Wall</span>
-          <span><i class="swatch" style="background:{CELL_COLORS["floor"]}"></i>Floor</span>
-          <span><i class="swatch" style="background:{CELL_COLORS["target"]}"></i>Target</span>
-          <span><i class="swatch" style="background:{CELL_COLORS["box"]}"></i>Box</span>
-          <span><i class="swatch" style="background:{CELL_COLORS["player"]}"></i>Player</span>
-          <span><i class="swatch" style="background:{CELL_COLORS["box_on_target"]}"></i>Box on target</span>
-        </div>
-      </aside>
-    </section>
-  </main>
-  <script>
-    const actions = [{escaped_actions}];
-    const frames = Array.from(document.querySelectorAll(".frame"));
-    const range = document.getElementById("stepRange");
-    const label = document.getElementById("stepLabel");
-
-    function showStep(step) {{
-      frames.forEach((frame, index) => frame.classList.toggle("active", index === step));
-      range.value = step;
-      label.textContent = `Step ${{step}} / ${{frames.length - 1}}: ${{actions[step]}}`;
-    }}
-
-    document.getElementById("prevButton").addEventListener("click", () => {{
-      showStep(Math.max(0, Number(range.value) - 1));
-    }});
-    document.getElementById("nextButton").addEventListener("click", () => {{
-      showStep(Math.min(frames.length - 1, Number(range.value) + 1));
-    }});
-    range.addEventListener("input", () => showStep(Number(range.value)));
-    showStep(0);
-  </script>
-</body>
-</html>
-"""
-
+    # Release the video file
+    video.release()
+    cv2.destroyAllWindows()
+    return
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate an HTML visualization for a Sokoban solution")
-    parser.add_argument("--level", default="level_easy.csv")
+    parser.add_argument("--level", default="level.csv")
     parser.add_argument(
         "--algorithm",
         choices=["bfs", "dfs", "dls", "iddfs", "greedy", "astar"],
@@ -259,7 +129,8 @@ def main() -> None:
         default="matching_real_distance",
     )
     parser.add_argument("--limit", type=int, default=30)
-    parser.add_argument("--output", default="results/visualizations/solution.html")
+    parser.add_argument("--fps", type=int, default=3)
+    parser.add_argument("--output", default="results/visualizations/solution.mp4")
     args = parser.parse_args()
 
     sokoban = Sokoban()
@@ -277,10 +148,10 @@ def main() -> None:
 
     output = ROOT_DIR / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        render_html(node_sequence(result.solution), args.level, args.algorithm, args.heuristic),
-        encoding="utf-8",
-    )
+    render_video(node_sequence(result.solution), output, args.fps)
+    # output.write_text(
+    #     encoding="utf-8",
+    # )
     print(f"Saved visualization to {output}")
 
 
