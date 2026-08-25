@@ -145,7 +145,7 @@ def main() -> None:
 
     if not result.solution:
         raise SystemExit("No solution found")
-
+    print("Done simulation, begin render")
     output = ROOT_DIR / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
     render_video(node_sequence(result.solution), output, args.fps)

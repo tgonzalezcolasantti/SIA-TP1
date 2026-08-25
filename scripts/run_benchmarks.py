@@ -256,7 +256,7 @@ def main() -> None:
         default=",".join(DEFAULT_HEURISTICS),
         help="Comma-separated heuristics for greedy/astar",
     )
-    parser.add_argument("--limit", type=int, default=20, help="Depth limit for dls/iddfs")
+    parser.add_argument("--limit", type=int, default=30, help="Depth limit for dls/iddfs")
     parser.add_argument("--timeout", type=float, default=1200.0, help="Timeout per run in seconds")
     parser.add_argument(
         "--eval-repeated",
