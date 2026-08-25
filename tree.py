@@ -33,7 +33,6 @@ class Node:
         heuristic_value: float,
     ):
         self.parent = parent
-        self.children: List[Node]
         self.state = node_state
         self.cost = cost
         self.depth = (parent.depth + 1) if parent else 1
@@ -49,7 +48,7 @@ class Node:
         return self.state.is_solved()
 
     def expand(self: Self) -> List[Node]:
-        self.children = []
+        children = []
         for child_state, action in self.state.apply_possible_moves():
             node = Node(
                 child_state,
@@ -58,8 +57,8 @@ class Node:
                 self.cost + self.state.get_cost(action),
                 child_state.heuristic(),
             )
-            self.children.append(node)
-        return self.children
+            children.append(node)
+        return children
 
     def path(self: Self) -> List[Enum]:
         actions = []
