@@ -29,7 +29,7 @@ from main import build_search
 from search import NoPossibleSolutions
 from sokoban import Sokoban
 
-DEFAULT_ALGORITHMS = ["bfs", "dfs", "greedy", "astar"]
+DEFAULT_ALGORITHMS = ["bfs", "dfs", "iddfs", "greedy", "astar"]
 DEFAULT_HEURISTICS = [
     "sum_nearest_target",
     "matching_min_distance",
@@ -189,15 +189,6 @@ def benchmark_cases(levels: List[str], algorithms: List[str], heuristics: List[s
     return cases
 
 
-def write_results(rows: List[Dict[str, object]], output: Path) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
 def print_row(row: Dict[str, object]) -> None:
     heuristic = row["heuristic"]
     time_sec = row["time_sec"]
@@ -208,7 +199,7 @@ def print_row(row: Dict[str, object]) -> None:
         f"expanded={row['expanded_nodes']!s:<8} time={time_text}"
     )
 
-def run_simulations(runs, levels, algorithms, heuristics, limit, eval_repeated, timeout, tasks):
+def run_simulations(runs, levels, algorithms, heuristics, limit, eval_repeated, timeout, tasks, writer: csv.DictWriter):
     taskprogress = Progress(
         TextColumn("[progress.description]{task.description}"),
         SpinnerColumn(),
@@ -241,7 +232,8 @@ def run_simulations(runs, levels, algorithms, heuristics, limit, eval_repeated, 
                     row = job.get()
                     globalprogress.advance(full_progress)
                     rows.append(row)
-                    #print_row(row)
+                    print_row(row)
+                    writer.writerow(row)
     return rows
 
 def main() -> None:
@@ -253,7 +245,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--runs",
-        default=10,
+        type=int,
+        default=5,
         help="How many iterations to run, to get error margins",
     )
     parser.add_argument(
@@ -266,8 +259,8 @@ def main() -> None:
         default=",".join(DEFAULT_HEURISTICS),
         help="Comma-separated heuristics for greedy/astar",
     )
-    parser.add_argument("--limit", type=int, default=100, help="Depth limit for dls/iddfs")
-    parser.add_argument("--timeout", type=float, default=1000.0, help="Timeout per run in seconds")
+    parser.add_argument("--limit", type=int, default=50, help="Depth limit for dls/iddfs")
+    parser.add_argument("--timeout", type=float, default=2000.0, help="Timeout per run in seconds")
     parser.add_argument(
         "--eval-repeated",
         action="store_true",
@@ -289,10 +282,12 @@ def main() -> None:
     algorithms = parse_csv_arg(args.algorithms)
     heuristics = parse_csv_arg(args.heuristics)
 
-    rows = run_simulations(args.runs, levels, algorithms, heuristics, args.limit, args.eval_repeated, args.timeout, args.tasks)
-
     output = ROOT_DIR / args.output
-    write_results(rows, output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        run_simulations(args.runs, levels, algorithms, heuristics, args.limit, args.eval_repeated, args.timeout, args.tasks, writer)
     print(f"\nSaved benchmark results to {output}")
 
 
