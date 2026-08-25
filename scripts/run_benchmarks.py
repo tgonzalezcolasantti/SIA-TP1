@@ -47,7 +47,6 @@ FIELDNAMES = [
     "expanded_nodes",
     "frontier_nodes",
     "time_sec",
-    "solution",
 ]
 
 
@@ -82,7 +81,6 @@ def run_case(
             "expanded_nodes": result.expanded_nodes,
             "frontier_nodes": result.frontier_nodes,
             "time_sec": result.processing_time_sec,
-            "solution": str(result.solution),
         }
     except NoPossibleSolutions:
         return {
@@ -95,7 +93,6 @@ def run_case(
             "expanded_nodes": search.expanded_nodes,
             "frontier_nodes": search.frontier_size(),
             "time_sec": time.perf_counter() - started_at,
-            "solucion": "N/A"
         }
 
 
@@ -282,9 +279,9 @@ def main() -> None:
     algorithms = parse_csv_arg(args.algorithms)
     heuristics = parse_csv_arg(args.heuristics)
 
-    output = ROOT_DIR / args.output
+    output = ROOT_DIR / str(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open("w", newline="", encoding="utf-8") as file:
+    with output.open("w", newline="", encoding="utf-8", buffering=1) as file:
         writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
         writer.writeheader()
         run_simulations(args.runs, levels, algorithms, heuristics, args.limit, args.eval_repeated, args.timeout, args.tasks, writer)
