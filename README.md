@@ -248,7 +248,7 @@ cortar corridas largas por timeout.
 Ejemplo:
 
 ```bash
-python scripts/run_benchmarks.py --levels level_easy.csv,level_mid.csv --runs 5 --algorithms bfs,dfs,iddfs,greedy,astar --heuristics sum_nearest_target,matching_min_distance,matching_real_distance --limit 20 --timeout 120 --output results/benchmark_results.csv
+python scripts/run_benchmarks.py --levels level_easy.csv,level_mid.csv --runs 5 --algorithms bfs,dfs,iddfs,greedy,astar --heuristics sum_nearest_target,matching_min_distance,matching_real_distance --limit 20 --timeout 120 --output results/benchmark_results.csv --tasks 8
 ```
 
 Parametros utiles:
@@ -318,6 +318,9 @@ results/visualizations/solution.mp4
 
 El video se construye generando un frame SVG por cada estado de la solucion y
 convirtiendolo a video con OpenCV.
+
+En caso de ejecutar en windows, se necesita instalar previamente GTK runtime, disponible en:
+https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases
 
 ## Ejemplos utiles para la presentacion
 
